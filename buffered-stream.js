@@ -99,6 +99,22 @@ BufferedStream.prototype.resume = function () {
 };
 
 /**
+ * Adds the given chunk of data at the top of the list of chunks for reading
+ * by consumers of the stream.
+ */
+BufferedStream.prototype.unshift = function (chunk, encoding) {
+  if (!this.writable) throw new Error('Stream is not writable');
+  if (this.ended) throw new Error('Stream is already ended');
+
+  if (typeof chunk === 'string') chunk = new Buffer(chunk, encoding);
+
+  this._buffer = [chunk].concat(this._buffer);
+  this.size += chunk.length;
+
+  flushOnNextTick(this);
+};
+
+/**
  * Writes the given chunk of data to this stream. Returns false if this
  * stream is full and should not be written to further until drained, true
  * otherwise.

@@ -102,6 +102,32 @@ describe('A BufferedStream', function () {
     });
   });
 
+  describe('unshift', function () {
+    it('throws when a stream is not writable', function () {
+      var stream = new BufferedStream;
+      stream.writable = false;
+      assert.throws(function () {
+        stream.write('test');
+      }, /not writable/);
+    });
+
+    it('throws when a stream is already ended', function () {
+      var stream = new BufferedStream;
+      stream.end();
+      assert.throws(function () {
+        stream.unshift('test');
+      }, /already ended/);
+    });
+
+    it('should add the chunk as the first buffer and increment the size', function () {
+      var stream = new BufferedStream;
+      stream.write('stuff', 'utf8');
+      stream.unshift('some', 'utf8');
+      assert.strictEqual(stringifyData(stream._buffer), 'somestuff');
+      assert.strictEqual(stream.size, 9);
+    });
+  });
+
   describe('write', function () {
     it('throws when a stream is not writable', function () {
       var stream = new BufferedStream;
