@@ -102,6 +102,65 @@ describe('A BufferedStream', function () {
     });
   });
 
+  describe('pipe', function () {
+    it('does not throw if a stream error occurs', function (callback) {
+      var error = new Error('BOOM');
+
+      // create a source stream which errors on read
+      var source = new Stream.Readable();
+      source._read = function () {
+        this.emit('error', error);
+      };
+
+      var stream = new BufferedStream();
+      stream.on('error', function (e) {
+        // ensure errors pass into the buffered stream
+        try {
+          assert.strictEqual(e, error);
+
+          callback(null);
+        } catch (e) {
+          callback(e);
+        }
+      });
+
+      // connect an error handler (this is before for old streams compatibility)
+      source.on('error', stream.emit.bind(stream, 'error'));
+      // now connect them to trigger the erroring write
+      source.pipe(stream);
+    });
+
+    describe('when piping into another stream', function () {
+      it('does not throw if a stream error occurs', function (callback) {
+        var error = new Error('BOOM');
+
+        var stream = new BufferedStream;
+        stream.on('error', function (e) {
+          try {
+            assert.strictEqual(e, error);
+
+            callback(null);
+          } catch (e) {
+            callback(e);
+          }
+        });
+
+        // create a target stream which errors on write
+        var target = new Stream.Writable();
+        target._write = function (chunk, encoding, callback) {
+          callback(error);
+        };
+        // now connect them to trigger the erroring write
+        stream.pipe(target);
+        // connect an error handler
+        target.on('error', stream.emit.bind(stream, 'error'));
+
+        // cause data to pass into the target
+        stream.write('foo');
+      });
+    });
+  });
+
   describe('unshift', function () {
     it('throws when a stream is not writable', function () {
       var stream = new BufferedStream;

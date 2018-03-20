@@ -1,3 +1,4 @@
+var EventEmitter = require('events').EventEmitter;
 var util = require('util');
 var Stream = require('stream');
 
@@ -96,6 +97,80 @@ BufferedStream.prototype.pause = function () {
 BufferedStream.prototype.resume = function () {
   if (this.paused) flushOnNextTick(this);
   this.paused = false;
+};
+
+/**
+ * Pipes all data in this stream through to the given destination stream.
+ * By default the destination stream is ended when this one ends. Set the
+ * "end" option to `false` to disable this behavior.
+ *
+ * This function was copied out of node's lib/stream.js and modified for
+ * use in other JavaScript environments.
+ */
+BufferedStream.prototype.pipe = function (dest, options) {
+  var source = this;
+
+  function ondata(chunk) {
+    if (dest.writable && false === dest.write(chunk))
+      source.pause();
+  }
+
+  source.on('data', ondata);
+
+  function ondrain() {
+    if (source.readable)
+      source.resume();
+  }
+
+  dest.on('drain', ondrain);
+
+  var didOnEnd = false;
+  function onend() {
+    if (didOnEnd) return;
+    didOnEnd = true;
+
+    dest.end();
+  }
+
+  // If the 'end' option is not supplied, dest.end() will be called when
+  // source gets the 'end' or 'close' events. Only dest.end() once.
+  if (!dest._isStdio && (!options || options.end !== false))
+    source.on('end', onend);
+
+  // don't leave dangling pipes when there are errors.
+  function onerror(error) {
+    cleanup();
+    // Check for an unhandled stream error in pipe.
+    if (EventEmitter.listenerCount(source, 'error') === 0) throw error;
+  }
+
+  source.on('error', onerror);
+  dest.on('error', onerror);
+
+  // remove all the event listeners that were added.
+  function cleanup() {
+    source.removeListener('data', ondata);
+    dest.removeListener('drain', ondrain);
+
+    source.removeListener('end', onend);
+
+    source.removeListener('error', onerror);
+    dest.removeListener('error', onerror);
+
+    source.removeListener('end', cleanup);
+  }
+
+  source.on('end', cleanup);
+  dest.on('close', cleanup);
+
+  dest.emit('pipe', source);
+
+  // Mimic the behavior of node v2 streams where pipe() resumes the flow.
+  // This lets us avoid having to do stream.resume() all over the place.
+  source.resume();
+
+  // Allow for unix-like usage: A.pipe(B).pipe(C)
+  return dest;
 };
 
 /**
